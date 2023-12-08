@@ -1,43 +1,43 @@
 #include <iostream>
 #include <vector>
 #include <algorithm>
+#include <limits>
 
 using namespace std;
-int NO_LO_VI = 0, EMPECE_A_VER = 1, TERMINE_DE_VER = 2;
 
-void dfs(int v, int p, vector<int> &estado, vector<int> &back_edges_inf_en, vector<int> &back_edges_sup_en, vector<vector<int>> &tree_edges, vector<pair<int,int>> &back_edges, vector<vector<int>> &m, vector<int> &padre) {
-    estado[v] = EMPECE_A_VER;
-    for (int u : m[v]) {
-        if (estado[u] == NO_LO_VI) {
-            padre[u] = v;
-            tree_edges[v].push_back(u);
-            dfs(u, v, estado, back_edges_inf_en, back_edges_sup_en, tree_edges, back_edges, m, padre);
-        } else if (u != p) {
-            if (estado[u] == EMPECE_A_VER){
-                back_edges_inf_en[v]++;
-                back_edges.push_back({v,u});
+const int INF = 1e9+1;
+
+struct GRAFO {
+    vector<int> padre_de;
+    vector<int> nivel_de;
+    vector<int> nivel_minimo_alcanzado;
+    vector<vector<int>> aristas;
+
+    GRAFO(int cantBases) :
+    padre_de(cantBases,-1),
+    nivel_de(cantBases, INF),
+    aristas(cantBases),
+    nivel_minimo_alcanzado(cantBases, INF){}
+};
+
+void dfs(int v, int padre, pair<int,int> ignorar, GRAFO &grafo){
+    grafo.padre_de[v] = padre;
+    grafo.nivel_de[v] = grafo.nivel_de[padre] + 1;
+    grafo.nivel_minimo_alcanzado[v] = grafo.nivel_de[v];
+    for(int i = 0; i < grafo.aristas[v].size(); i++){
+        int posible_hijo_de_v = grafo.aristas[v][i];
+        if(make_pair(v,posible_hijo_de_v) != ignorar && make_pair(posible_hijo_de_v, v) != ignorar){
+            if(grafo.padre_de[posible_hijo_de_v] == -1){
+                dfs(posible_hijo_de_v, v, ignorar, grafo);
+                grafo.nivel_minimo_alcanzado[v] = min(grafo.nivel_minimo_alcanzado[v],grafo.nivel_minimo_alcanzado[posible_hijo_de_v]);
             }
-            else // estado[u] == TERMINE_DE_VER
-                back_edges_sup_en[v]++;
-
+            else if(grafo.padre_de[v] != posible_hijo_de_v && grafo.nivel_de[posible_hijo_de_v] < grafo.nivel_de[v]){
+                grafo.nivel_minimo_alcanzado[v] = min(grafo.nivel_minimo_alcanzado[v],grafo.nivel_de[posible_hijo_de_v]);
+            }
         }
     }
-    estado[v] = TERMINE_DE_VER;
-}
 
 
-int cubren(int v, int p, vector<int> &memo, vector<vector<int>> &tree_edges, vector<int> &back_edges_inf_en, vector<int> &back_edges_sup_en) {
-    if (memo[v] != -1) return memo[v];
-    int res = 0;
-    for (int hijo : tree_edges[v]) {
-        if (hijo != p) {
-            res += cubren(hijo, v, memo, tree_edges, back_edges_inf_en, back_edges_sup_en);
-        }
-    }
-    res -= back_edges_sup_en[v];
-    res += back_edges_inf_en[v];
-    memo[v] = res;
-    return res;
 }
 
 int main() {
@@ -45,63 +45,36 @@ int main() {
     cin >> cantCasos;
     for(int i = 0; i<cantCasos; i++){
         cin >> cantBases >> cantEnlaces;
-        vector<vector<int>> m(cantBases);
+        GRAFO grafo(cantBases);
+        vector<pair<int,int>> aristas_a_ignorar;
         for(int j = 0; j<cantEnlaces;j++){
             cin >> U >> V;
-            m[U].push_back(V);
-            m[V].push_back(U);
+            grafo.aristas[U].push_back(V);
+            grafo.aristas[V].push_back(U);
+            aristas_a_ignorar.push_back({U,V});
         }
-
         vector<pair<int,int>> importantes;
-        vector<int> estado(cantBases, NO_LO_VI);
-        vector<int> back_edges_inf_en(cantBases, 0);
-        vector<int> back_edges_sup_en(cantBases, 0);
-        vector<vector<int>> tree_edges(cantBases);
-        vector<pair<int,int>> back_edges;
-        vector<int> padre(cantBases);
-
-        dfs(0,-1, estado, back_edges_inf_en, back_edges_sup_en, tree_edges, back_edges, m, padre);
-
-        vector<int> memo(cantBases, -1);
-
-        for(int k = 0; k < tree_edges.size(); k++){
-            for(int l = 0; l < tree_edges[k].size(); l++){
-                if(cubren(tree_edges[k][l], -1, memo, tree_edges, back_edges_inf_en, back_edges_sup_en) == 1){
-                    if(tree_edges[k][l] < k){
-                        importantes.push_back({tree_edges[k][l], k});
-                    }
-                    else{
-                        importantes.push_back({k, tree_edges[k][l]});
-                    }
+        for(int j = 0; j < aristas_a_ignorar.size(); j++){
+            grafo.padre_de = vector<int>(cantBases,-1);
+            grafo.nivel_de = vector<int>(cantBases, INF);
+            grafo.nivel_minimo_alcanzado = vector<int>(cantBases,INF);
+            grafo.nivel_de[0] = 0;
+            dfs(0,0,aristas_a_ignorar[j],grafo);
+            for(int k = 0; k < cantBases; k++){
+                if(grafo.nivel_minimo_alcanzado[k] > grafo.nivel_de[grafo.padre_de[i]]){
+                    importantes.push_back({min(aristas_a_ignorar[j].first,aristas_a_ignorar[j].second), max(aristas_a_ignorar[j].first,aristas_a_ignorar[j].second)});
+                    k = cantBases;
                 }
             }
+            int a = 0;
         }
-        if(importantes.size() == 0){
-            cout<< 0 << endl;
+        sort(importantes.begin(), importantes.end());
+        cout << importantes.size() << endl;
+        for(int w = 0; w < importantes.size(); w++){
+            cout << importantes[w].first << " " << importantes[w].second << endl;
         }
-        if(importantes.size() > 0){
-            for(int q = 0; q < back_edges.size(); q++){
-                bool esImportante = false;
-                int punta_inf = back_edges[q].first;
-                int inicio  = back_edges[q].first;
-                int punta_sup = back_edges[q].second;
-                while(inicio != punta_sup && !esImportante){
-                    if(cubren(inicio, -1, memo, tree_edges, back_edges_inf_en, back_edges_sup_en) == 1){
-                        esImportante = true;
-                        importantes.push_back({min(punta_inf,punta_sup), max(punta_inf,punta_sup)});
-                    }
-                    else{
-                        inicio = padre[inicio];
-                    }
-                }
-            }
-            cout << importantes.size() << endl;
-            sort(importantes.begin(), importantes.end());
-            for(int u = 0; u < importantes.size(); u++){
-                cout<< importantes[u].first << " " << importantes[u].second << endl;
-            }
-        }
+
+
     }
     return 0;
 }
-
